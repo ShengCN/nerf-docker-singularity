@@ -1,0 +1,23 @@
+Bootstrap: docker 
+# From: nvidia/cuda:11.7.0-devel-ubuntu20.04
+# From: yichensheng/nerfstudio-0.3.1 
+From: yichensheng/nerfstudio-non-cudnn
+
+Stage: build
+
+%post
+    export DEBIAN_FRONTEND=noninteractive
+    # apt-get update && apt-get install -y netcat && apt-get install -y ffmpeg 
+    NOW=`date`
+    echo "export NOW=\"${NOW}\"" >> $SINGULARITY_ENVIRONMENT
+    echo "export SHELL=/bin/bash" >> $SINGULARITY_ENVIRONMENT
+    # echo "export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH" >> $SINGULARITY_ENVIRONMENT
+    echo ". /opt/miniconda3/etc/profile.d/conda.sh" >> ~/.bashrc
+
+%environment
+    export SHELL=/bin/bash
+    export PATH="/opt/miniconda/bin:$PATH"
+
+    echo ". /opt/miniconda3/etc/profile.d/conda.sh" >> ~/.bashrc
+	. /opt/miniconda3/etc/profile.d/conda.sh
+    source ~/.bashrc && conda activate nerfstudio

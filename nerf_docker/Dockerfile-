@@ -1,0 +1,120 @@
+FROM nvidia/cuda:11.7.0-devel-ubuntu20.04  as base
+
+ENV NV_CUDA_LIB_VERSION "11.7.0-1"
+
+FROM base as base-amd64
+
+ENV NV_CUDA_CUDART_DEV_VERSION 11.7.60-1
+ENV NV_NVML_DEV_VERSION 11.7.50-1
+ENV NV_LIBCUSPARSE_DEV_VERSION 11.7.3.50-1
+ENV NV_LIBNPP_DEV_VERSION 11.7.3.21-1
+ENV NV_LIBNPP_DEV_PACKAGE libnpp-dev-11-7=${NV_LIBNPP_DEV_VERSION}
+
+ENV NV_LIBCUBLAS_DEV_VERSION 11.10.1.25-1
+ENV NV_LIBCUBLAS_DEV_PACKAGE_NAME libcublas-dev-11-7
+ENV NV_LIBCUBLAS_DEV_PACKAGE ${NV_LIBCUBLAS_DEV_PACKAGE_NAME}=${NV_LIBCUBLAS_DEV_VERSION}
+
+ENV NV_NVPROF_VERSION 11.7.50-1
+ENV NV_NVPROF_DEV_PACKAGE cuda-nvprof-11-7=${NV_NVPROF_VERSION}
+
+ENV NV_LIBNCCL_DEV_PACKAGE_NAME libnccl-dev
+ENV NV_LIBNCCL_DEV_PACKAGE_VERSION 2.13.4-1
+ENV NCCL_VERSION 2.13.4-1
+ENV NV_LIBNCCL_DEV_PACKAGE ${NV_LIBNCCL_DEV_PACKAGE_NAME}=${NV_LIBNCCL_DEV_PACKAGE_VERSION}+cuda11.7
+FROM base as base-arm64
+
+ENV NV_CUDA_CUDART_DEV_VERSION 11.7.60-1
+ENV NV_NVML_DEV_VERSION 11.7.50-1
+ENV NV_LIBCUSPARSE_DEV_VERSION 11.7.3.50-1
+ENV NV_LIBNPP_DEV_VERSION 11.7.3.21-1
+ENV NV_LIBNPP_DEV_PACKAGE libnpp-dev-11-7=${NV_LIBNPP_DEV_VERSION}
+
+ENV NV_LIBCUBLAS_DEV_PACKAGE_NAME libcublas-dev-11-7
+ENV NV_LIBCUBLAS_DEV_VERSION 11.10.1.25-1
+ENV NV_LIBCUBLAS_DEV_PACKAGE ${NV_LIBCUBLAS_DEV_PACKAGE_NAME}=${NV_LIBCUBLAS_DEV_VERSION}
+
+ENV NV_NVPROF_VERSION 11.7.50-1
+ENV NV_NVPROF_DEV_PACKAGE cuda-nvprof-11-7=${NV_NVPROF_VERSION}
+
+
+ENV TARGETARCH=amd64
+# FROM base-${TARGETARCH}
+
+ARG TARGETARCH
+LABEL maintainer "Yichen Sheng <sheng30@purdue.edu>"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    cuda-cudart-dev-11-7=${NV_CUDA_CUDART_DEV_VERSION} \
+    cuda-command-line-tools-11-7=${NV_CUDA_LIB_VERSION} \
+    cuda-minimal-build-11-7=${NV_CUDA_LIB_VERSION} \
+    cuda-libraries-dev-11-7=${NV_CUDA_LIB_VERSION} \
+    cuda-nvml-dev-11-7=${NV_NVML_DEV_VERSION} \
+    ${NV_NVPROF_DEV_PACKAGE} \
+    ${NV_LIBNPP_DEV_PACKAGE} \
+    libcusparse-dev-11-7=${NV_LIBCUSPARSE_DEV_VERSION} \
+    ${NV_LIBCUBLAS_DEV_PACKAGE} \
+    ${NV_LIBNCCL_DEV_PACKAGE} \
+    && rm -rf /var/lib/apt/lists/*
+
+# Keep apt from auto upgrading the cublas and nccl packages. See https://gitlab.com/nvidia/container-images/cuda/-/issues/88
+RUN apt-mark hold ${NV_LIBCUBLAS_DEV_PACKAGE_NAME} ${NV_LIBNCCL_DEV_PACKAGE_NAME}
+ENV LIBRARY_PATH /usr/local/cuda/lib64/stubs
+
+
+LABEL maintainer "Yichen Sheng <sheng30@purdue.edu>"
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+	vim \
+	git \
+	cmake \
+	zsh \
+	build-essential \
+	curl \
+	wget \
+	libglu1-mesa-dev \
+	freeglut3-dev \
+	mesa-common-dev \
+    colmap \ 
+    && rm -rf /var/lib/apt/lists/*
+
+
+RUN apt update
+RUN apt install -y software-properties-common
+RUN add-apt-repository universe \
+    && add-apt-repository multiverse
+RUN apt install -y wget && rm -rf /var/lib/apt/lists/*
+RUN apt update
+
+RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
+   && mkdir /root/.conda \
+   && bash Miniconda3-latest-Linux-x86_64.sh -b -p /opt/miniconda3 \
+   && rm -f Miniconda3-latest-Linux-x86_64.sh
+
+COPY zsh-in-docker.sh /tmp
+RUN chmod +x /tmp/zsh-in-docker.sh
+RUN /tmp/zsh-in-docker.sh \
+    -t https://github.com/denysdovhan/spaceship-prompt \
+    -a 'SPACESHIP_PROMPT_ADD_NEWLINE="false"' \
+    -a 'SPACESHIP_PROMPT_SEPARATE_LINE="false"' \
+    -p git \
+    -p https://github.com/zsh-users/zsh-autosuggestions \
+    -p https://github.com/zsh-users/zsh-completions \
+    -p https://github.com/zsh-users/zsh-history-substring-search \
+    -p https://github.com/zsh-users/zsh-syntax-highlighting \
+    -p 'history-substring-search' \
+    -a 'bindkey "\$terminfo[kcuu1]" history-substring-search-up' \
+    -a 'bindkey "\$terminfo[kcud1]" history-substring-search-down'
+
+
+# setup nerfstudio
+ENV PATH /opt/miniconda3/bin:$PATH
+
+# setup nerfstudio 
+RUN conda create --name nerfstudio -y python=3.8 
+RUN /bin/bash -c "source activate nerfstudio && python -m pip install --upgrade pip && pip install torch==2.0.1+cu117 torchvision==0.15.2+cu117 --extra-index-url https://download.pytorch.org/whl/cu117 && pip install ninja git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch && pip install nerfstudio"
+RUN /bin/bash -c "source activate nerfstudio && cd Hierarchical-Localization && python -m pip install --upgrade pip && pip install torch==2.0.1+cu117 torchvision==0.15.2+cu117 --extra-index-url https://download.pytorch.org/whl/cu117 && pip install ninja git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch && pip install nerfstudio"
+
+WORKDIR /home/root/
+ENTRYPOINT [  "/bin/zsh" ]
