@@ -1,0 +1,1 @@
+sudo singularity build nerfstudio.sif nerf.def

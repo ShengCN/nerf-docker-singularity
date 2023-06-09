@@ -2,41 +2,57 @@ FROM nvidia/cuda:11.8.0-devel-ubuntu22.04  as base
 
 ENV NV_CUDA_LIB_VERSION "11.8.0"
 
-FROM base as base-amd64
+FROM base as base-amd6
 
 LABEL maintainer "Yichen Sheng <sheng30@purdue.edu>"
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-	vim \
-	git \
-	cmake \
-	build-essential \
-	curl \
-	wget \
-	libboost-program-options-dev \
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+# ARG CUDA_ARCHITECTURES=90;89;86;80;75;70;61;52;37
+ARG CUDA_ARCHITECTURES=90;89;86;80
+
+# Install required apt packages and clear cache afterwards.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    curl \
+    ffmpeg \
+    git \
+    htop \ 
+    wget \
+    colmap \ 
+    libatlas-base-dev \
     libboost-filesystem-dev \
     libboost-graph-dev \
+    libboost-program-options-dev \
     libboost-system-dev \
     libboost-test-dev \
+    libhdf5-dev \
+    libcgal-dev \
     libeigen3-dev \
     libflann-dev \
     libfreeimage-dev \
-    libmetis-dev \
-    libgoogle-glog-dev \
     libgflags-dev \
-    libsqlite3-dev \
     libglew-dev \
-    qtbase5-dev \
+    libgoogle-glog-dev \
+    libmetis-dev \
+    libprotobuf-dev \
     libqt5opengl5-dev \
-    libcgal-dev \
-    libceres-dev \ 
-	nvidia-cuda-toolkit \
-    nvidia-cuda-toolkit-gcc \ 
-    colmap \ 
-	ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+    libsqlite3-dev \
+    libsuitesparse-dev \
+    nano \
+    protobuf-compiler \
+    python-is-python3 \
+    python3.10-dev \
+    python3-pip \
+    qtbase5-dev \
+    sudo \
+    vim-tiny \
+    wget && \
+    rm -rf /var/lib/apt/lists/*
 
 # colmap seems to have a bug in the docker image, a workaround is this: 
 # https://stackoverflow.com/questions/63627955/cant-load-shared-library-libqt5core-so-5 
@@ -55,39 +71,34 @@ RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh \
    && bash Miniconda3-latest-Linux-x86_64.sh -b -p /opt/miniconda3 \
    && rm -f Miniconda3-latest-Linux-x86_64.sh
 
-# COPY zsh-in-docker.sh /tmp
-# RUN chmod +x /tmp/zsh-in-docker.sh
-# RUN /tmp/zsh-in-docker.sh \
-#     -t https://github.com/denysdovhan/spaceship-prompt \
-#     -a 'SPACESHIP_PROMPT_ADD_NEWLINE="false"' \
-#     -a 'SPACESHIP_PROMPT_SEPARATE_LINE="false"' \
-#     -p git \
-#     -p https://github.com/zsh-users/zsh-autosuggestions \
-#     -p https://github.com/zsh-users/zsh-completions \
-#     -p https://github.com/zsh-users/zsh-history-substring-search \
-#     -p https://github.com/zsh-users/zsh-syntax-highlighting \
-#     -p 'history-substring-search' \
-#     -a 'bindkey "\$terminfo[kcuu1]" history-substring-search-up' \
-#     -a 'bindkey "\$terminfo[kcud1]" history-substring-search-down'
-
 
 # setup nerfstudio
 ENV PATH /opt/miniconda3/bin:$PATH
 
 # setup nerfstudio 
 RUN conda create --name nerfstudio -y python=3.8 
+
+RUN /bin/bash -c "source activate nerfstudio && pip install --upgrade pip setuptools pathtools promise pybind11"
+
 RUN /bin/bash -c "source activate nerfstudio && python -m pip install --upgrade pip && pip install torch==2.0.1+cu118 torchvision==0.15.2+cu118 --extra-index-url https://download.pytorch.org/whl/cu118"
-#RUN /bin/bash -c "source activate nerfstudio && conda install -c \"nvidia/label/cuda-11.7.1\" cuda-toolkit"
-# RUN /bin/bash -c "nvcc --version"
 ENV PATH /usr/local/cuda/bin:$PATH
 ENV LD_LIBRARY_PATH /usr/local/cuda/lib64:$LD_LIBRARY_PATH
-RUN /bin/bash -c "source activate nerfstudio && MAKEFLAGS=\"-j12\" pip install ninja git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch"
-RUN /bin/bash -c "source activate nerfstudio && pip install nerfstudio"
+# RUN /bin/bash -c "source activate nerfstudio && MAKEFLAGS=\"-j12\" pip install ninja git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch"
 
-RUN git clone https://github.com/cvg/Hierarchical-Localization.git /tmp/hloc 
-RUN /bin/bash -c "source activate nerfstudio && cd /tmp/hloc && python -m pip install ."
-RUN rm -rf /tmp/*
+# install tiny cuda nn
+ENV TCNN_CUDA_ARCHITECTURES=${CUDA_ARCHITECTURES}
+RUN /bin/bash -c "source activate nerfstudio && python -m pip install git+https://github.com/NVlabs/tiny-cuda-nn.git@v1.6#subdirectory=bindings/torch"
+
+# install hloc
+RUN git clone --recursive https://github.com/cvg/Hierarchical-Localization.git /home/root/hloc 
+RUN /bin/bash -c "source activate nerfstudio && cd /home/root/hloc && python -m pip install -e ."
+
+# install omegaconf and nerfstudio
+RUN /bin/bash -c "source activate nerfstudio && pip install omegaconf"
+
+# install nerfstudio from src
+COPY nerfstudio /home/root/nerfstudio
+RUN /bin/bash -c "source activate nerfstudio && cd /home/root/nerfstudio && python -m pip install -e ."
 
 WORKDIR /home/root/
-# ENTRYPOINT [  "/bin/zsh" ]
 ENTRYPOINT [  "/bin/bash" ]

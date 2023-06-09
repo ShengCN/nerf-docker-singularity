@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 	build-essential \
 	curl \
 	wget \
+    htop \ 
 	libboost-program-options-dev \
     libboost-filesystem-dev \
     libboost-graph-dev \
@@ -76,17 +77,20 @@ ENV PATH /opt/miniconda3/bin:$PATH
 
 # setup nerfstudio 
 RUN conda create --name nerfstudio -y python=3.8 
-RUN /bin/bash -c "source activate nerfstudio && python -m pip install --upgrade pip && pip install torch==2.0.1+cu118 torchvision==0.15.2+cu118 --extra-index-url https://download.pytorch.org/whl/cu118"
+RUN CUDA_ARCHITECTURES=90;89;86;80;75;70;61;52;37 /bin/bash -c "source activate nerfstudio && python -m pip install --upgrade pip && pip install torch==2.0.1+cu118 torchvision==0.15.2+cu118 --extra-index-url https://download.pytorch.org/whl/cu118"
 #RUN /bin/bash -c "source activate nerfstudio && conda install -c \"nvidia/label/cuda-11.7.1\" cuda-toolkit"
 # RUN /bin/bash -c "nvcc --version"
 ENV PATH /usr/local/cuda/bin:$PATH
 ENV LD_LIBRARY_PATH /usr/local/cuda/lib64:$LD_LIBRARY_PATH
 # RUN /bin/bash -c "source activate nerfstudio && MAKEFLAGS=\"-j12\" pip install ninja git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch"
-RUN /bin/bash -c "source activate nerfstudio && pip install nerfstudio"
 
-RUN git clone https://github.com/cvg/Hierarchical-Localization.git /tmp/hloc 
-RUN /bin/bash -c "source activate nerfstudio && cd /tmp/hloc && python -m pip install ."
-RUN rm -rf /tmp/*
+# install tiny cuda nn
+RUN git clone --recurse-submodules -j8 https://github.com/NVlabs/tiny-cuda-nn.git  /home/root/tiny-cuda-nn
+RUN CUDA_ARCHITECTURES=90;89;86;80;75;70;61;52;37 /bin/bash -c  "source activate nerfstudio && cd /home/root/tiny-cuda-nn/bindings/torch && python -m pip install  ."
+RUN CUDA_ARCHITECTURES=90;89;86;80;75;70;61;52;37 /bin/bash -c "source activate nerfstudio && pip install nerfstudio"
+
+RUN git clone --recursive https://github.com/cvg/Hierarchical-Localization.git /home/root/hloc 
+RUN CUDA_ARCHITECTURES=90;89;86;80;75;70;61;52;37 /bin/bash -c "source activate nerfstudio && cd /home/root/hloc && python -m pip install -e ."
 
 WORKDIR /home/root/
 # ENTRYPOINT [  "/bin/zsh" ]

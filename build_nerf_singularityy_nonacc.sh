@@ -1,0 +1,1 @@
+sudo singularity build nerfstudio-non-acc.sif nerf-non-acc.def
